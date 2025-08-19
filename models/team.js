@@ -1,36 +1,41 @@
 module.exports = (sequelize, DataTypes) => {
   const Team = sequelize.define('Team', {
-    student1_id: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: 'Students',
-        key: 'id'
-      },
+    student1_id: { 
+      type: DataTypes.INTEGER, 
+      references: { model: 'Students', key: 'id' },
       allowNull: false
     },
-    student2_id: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: 'Students',
-        key: 'id'
-      },
+    student2_id: { 
+      type: DataTypes.INTEGER, 
+      references: { model: 'Students', key: 'id' },
       allowNull: true
     },
-    mentor_id: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: 'Mentors',
-        key: 'id'
-      },
+    mentor_id: { 
+      type: DataTypes.INTEGER, 
+      references: { model: 'Mentors', key: 'id' },
       allowNull: true
     },
     current_semester: {
       type: DataTypes.INTEGER,
       allowNull: false
     },
-    status: {
-      type: DataTypes.STRING,
-      defaultValue: 'pending'
+    status: { 
+      type: DataTypes.STRING, 
+      defaultValue: 'active'   // changed from 'pending' to 'active'
+    },
+
+    // Newly added columns from migration:
+    student1_unassigned_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    student2_unassigned_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    mentor_unassigned_at: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   });
 
@@ -41,15 +46,8 @@ module.exports = (sequelize, DataTypes) => {
 
     Team.hasMany(models.ProfessionalTraining1, { foreignKey: 'team_id', as: 'ProfessionalTrainings1' });
     Team.hasMany(models.ProfessionalTraining2, { foreignKey: 'team_id', as: 'ProfessionalTrainings2' });
-    Team.hasMany(models.FinalYearProject, { foreignKey: 'team_id', as: 'FinalYearProjects' });
+    Team.hasMany(models.FinalYearProject,     { foreignKey: 'team_id', as: 'FinalYearProjects' });
   };
-
-  // Sync semester when team is created
-  Team.beforeCreate(async (team, options) => {
-    const Student = sequelize.models.Student;
-    const student1 = await Student.findByPk(team.student1_id);
-    team.current_semester = student1?.current_semester || 5;
-  });
 
   return Team;
 };

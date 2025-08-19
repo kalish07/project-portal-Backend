@@ -1,34 +1,72 @@
 module.exports = (sequelize, DataTypes) => {
-    const ProjectDeadline = sequelize.define('ProjectDeadline', {
-      project_type: {
-        type: DataTypes.ENUM('ProfessionalTraining1', 'ProfessionalTraining2', 'FinalYearProject'),
-        allowNull: false,
-        comment: "Indicates the project category."
+  const ProfessionalTraining2 = sequelize.define('ProfessionalTraining2', {
+    title: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    team_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'Teams',
+        key: 'id'
       },
-      department: {
-        type: DataTypes.ENUM('Cybersecurity', 'AI/ROBOTICS', 'AI/ML', 'Blockchain'),
-        allowNull: false,
-        comment: "Department associated with the project."
+      allowNull: false
+    },
+    mentor_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'Mentors',
+        key: 'id'
       },
-      semester: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        validate: {
-          min: 1,
-          max: 8,
-        },
-        comment: "Semester (1-8) when the project is applicable."
-      },
-      deadline: {
-        type: DataTypes.DATE,
-        allowNull: false,
-        comment: "Deadline for project submission."
-      }
-    }, {
-      tableName: 'project_deadlines',
-      timestamps: true, // Adds createdAt and updatedAt fields
-    });
-  
-    return ProjectDeadline;
+      allowNull: true
+    },
+    domain: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    abstract_url: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    report_pdf_url: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    ppt_url: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    demo_video_url: {   // Newly added field
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    approved_status: {
+      type: DataTypes.STRING,
+      defaultValue: 'pending',
+      allowNull: false
+    },
+    zero_review_marks: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
+    first_review_marks: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
+    second_review_marks: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    }
+  });
+
+  ProfessionalTraining2.associate = (models) => {
+    ProfessionalTraining2.belongsTo(models.Team, { foreignKey: 'team_id' });
+    ProfessionalTraining2.belongsTo(models.Mentor, { foreignKey: 'mentor_id' });
   };
-  
+
+  return ProfessionalTraining2;
+};

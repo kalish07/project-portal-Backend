@@ -1,5 +1,5 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const models = require('../models');
 const dotenv = require('dotenv');
@@ -37,7 +37,13 @@ router.post('/admin/login', async (req, res) => {
     if (!isValidPassword) return res.status(401).json({ error: 'Invalid email or password' });
 
     const token = jwt.sign({ userId: admin.id, role: 'admin' }, JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, role: 'admin' });
+
+    res.json({
+      token,
+      role: 'admin',
+      name: admin.name,
+      email: admin.email
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

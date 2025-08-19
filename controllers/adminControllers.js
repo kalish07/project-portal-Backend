@@ -1,6 +1,12 @@
 const { Student, Mentor,ProfessionalTraining1,ProfessionalTraining2,FinalYearProject, Team, Announcement, sequelize } = require('../models'); // Adjust the path as necessary
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 const { Op, Sequelize } = require("sequelize");
+const xlsx = require("xlsx");
+const fs = require("fs")
+const path = require('path');
+const sharp = require("sharp");
+const AdmZip = require("adm-zip");
+const unzipper = require("unzipper");
 
 // Function to create a new student
 const createStudent = async (req, res) => {
@@ -1190,6 +1196,264 @@ const getDashboardStats = async (req, res) => {
 
 
 
+//---------------------------upload students Data ---------------------------------------
+const VALID_DEPARTMENTS = [
+  "Cyber Security",
+  "AI/Robotics",
+  "Blockchain",
+  "AI/ML",
+  "Data Science",
+  "IoT",
+  "AI"
+];
+
+// Map raw inputs to valid enum values
+const departmentMap = {
+  "cyber security": "Cyber Security",
+  "cyber-security": "Cyber Security",
+  "ai/robotics": "AI/Robotics",
+  "ai robotics": "AI/Robotics",
+  "ai/ml": "AI/ML",
+  "ai ml": "AI/ML",
+  "ai": "AI",
+  "data science": "Data Science",
+  "iot": "IoT",
+  "devops": "IoT", // 🔁 map to closest enum if needed
+  "blockchain": "Blockchain"
+};
+
+const bulkUploadFromExcel = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No Excel file uploaded." });
+    }
+
+    console.log("📂 Uploaded file info:", req.file);
+
+    const filePath = path.join(__dirname, "../uploads", req.file.filename);
+    const workbook = xlsx.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    let createdCount = 0;
+    const skipped = [];
+
+    for (const entry of data) {
+      let {
+        student_name,
+        reg_number,
+        department_name,
+        current_semester,
+        email
+      } = entry;
+
+      const missingFields = [];
+      if (!student_name) missingFields.push("student_name");
+      if (!reg_number) missingFields.push("reg_number");
+      if (!email) missingFields.push("email");
+
+      if (missingFields.length > 0) {
+        skipped.push({ reg_number: reg_number || "N/A", reason: `Missing fields: ${missingFields.join(", ")}` });
+        continue;
+      }
+
+      // Normalize and validate department
+      const deptKey = department_name?.toLowerCase().trim();
+      department_name = departmentMap[deptKey];
+
+      if (!VALID_DEPARTMENTS.includes(department_name)) {
+        skipped.push({ reg_number, reason: `Invalid department: ${entry.department_name}` });
+        continue;
+      }
+
+      // Ensure reg_number is treated as a string
+      const regNumStr = String(reg_number);
+
+      const exists = await Student.findOne({ where: { reg_number: regNumStr } });
+      if (exists) {
+        skipped.push({ reg_number: regNumStr, reason: "Duplicate reg_number" });
+        continue;
+      }
+
+      const semester = current_semester || 6;
+      const defaultPassword = "password" + regNumStr.slice(-4);
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+      await Student.create({
+        student_name,
+        reg_number: regNumStr,
+        department_name,
+        current_semester: semester,
+        email,
+        password: hashedPassword,
+        profile_pic_url: null
+      });
+
+      createdCount++;
+    }
+
+    fs.unlinkSync(filePath);
+
+    return res.status(200).json({
+      message: "Excel upload completed.",
+      createdCount,
+      skipped
+    });
+
+  } catch (error) {
+    console.error("Excel upload error:", error);
+    return res.status(500).json({ error: "Bulk upload failed." });
+  }
+};
+
+
+const uploadProfilePictures = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: "No files uploaded" });
+    }
+
+    const updated = [];
+    const skipped = [];
+
+    for (const file of req.files) {
+      const ext = path.extname(file.originalname);
+      const baseName = path.basename(file.originalname, ext);
+      const regNumber = baseName.split("-")[0];
+
+      if (!regNumber || isNaN(Number(regNumber))) {
+        skipped.push({ file: file.originalname, reason: "Invalid file format" });
+        continue;
+      }
+
+      const student = await Student.findOne({ where: { reg_number: regNumber } });
+      if (!student) {
+        skipped.push({ reg_number: regNumber, reason: "Student not found" });
+        continue;
+      }
+
+      // Compress the image and overwrite the uploaded one
+      const compressedPath = path.join("uploads/profile_pics", file.originalname);
+      await sharp(file.path)
+      .rotate()
+      .resize(400, 400, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 80 })
+      .toFile(outputPath);
+
+      const profileUrl = `/uploads/profile_pics/${file.originalname}`;
+      await student.update({ profile_pic_url: profileUrl });
+
+      updated.push(regNumber);
+    }
+
+    res.status(200).json({
+      message: "Profile pictures processed",
+      updatedCount: updated.length,
+      skipped,
+    });
+  } catch (error) {
+    console.error("Upload error:", error);
+    res.status(500).json({ error: "Failed to process profile pictures" });
+  }
+};
+
+
+//--------------upload profile pictures zip-------------------
+const VALID_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png",".JPG", ".JPEG", ".PNG"];
+const TEMP_DIR = path.join(__dirname, "../uploads/profile_temp");
+const FINAL_DIR = path.join(__dirname, "../uploads/profile_pics");
+
+// Helper: Recursively walk directory to get all image files
+const walkDirectory = (dir) => {
+  let files = [];
+  fs.readdirSync(dir).forEach((file) => {
+    const filepath = path.join(dir, file);
+    if (fs.statSync(filepath).isDirectory()) {
+      files = files.concat(walkDirectory(filepath));
+    } else if (VALID_IMAGE_EXTENSIONS.includes(path.extname(file).toLowerCase())) {
+      files.push(filepath);
+    }
+  });
+  return files;
+};
+
+const uploadProfileZipHandler = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No ZIP file uploaded." });
+    }
+
+    const zipPath = req.file.path;
+
+    // 1. Extract ZIP to temp folder
+    await fs.createReadStream(zipPath)
+      .pipe(unzipper.Extract({ path: TEMP_DIR }))
+      .promise();
+
+    // 2. Walk through extracted directory and find images
+    const files = walkDirectory(TEMP_DIR);
+    let updatedCount = 0;
+    const skipped = [];
+
+    for (const filePath of files) {
+      const filename = path.basename(filePath);
+      const regNumber = filename.split("-")[0];
+
+      if (!/^\d{8}$/.test(regNumber)) {
+        skipped.push({ file: filename, reason: "Invalid filename format" });
+        continue;
+      }
+
+      const student = await Student.findOne({ where: { reg_number: regNumber } });
+
+      if (!student) {
+        skipped.push({ file: filename, reason: "Student not found" });
+        continue;
+      }
+
+      const finalFilename = filename.replace(/\s+/g, "_");
+      const destinationPath = path.join(FINAL_DIR, finalFilename);
+
+      try {
+        // Compress and move to final location
+        await sharp(filePath)
+          .rotate()
+          .resize(400, 400, {
+            fit: "inside",
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 80 })
+          .toFile(destinationPath);
+
+        // Update DB
+        student.profile_pic_url = `/uploads/profile_pics/${finalFilename}`;
+        await student.save();
+        updatedCount++;
+      } catch (err) {
+        skipped.push({ file: filename, reason: "Failed to compress/save" });
+      }
+    }
+
+    // Clean up: delete temp and zip
+    fs.rmSync(TEMP_DIR, { recursive: true, force: true });
+    fs.unlinkSync(zipPath);
+
+    res.status(200).json({
+      message: "ZIP profile upload complete.",
+      updatedCount,
+      skipped,
+    });
+  } catch (err) {
+    console.error("Profile ZIP upload error:", err);
+    res.status(500).json({ error: "Upload failed." });
+  }
+};
+
+
+
 
 
 
@@ -1223,7 +1487,10 @@ module.exports = {
   bulkUpdateMentorCapacities,
   changeMentorForTeam,
   updateAdminPassword,
-  getDashboardStats
+  getDashboardStats,
+  bulkUploadFromExcel,
+  uploadProfilePictures,
+  uploadProfileZipHandler
 
 
   

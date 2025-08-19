@@ -40,6 +40,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: true
     },
+    demo_video_url: {  // Newly added field
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     approved_status: {
       type: DataTypes.STRING,
       defaultValue: 'pending',

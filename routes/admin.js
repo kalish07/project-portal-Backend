@@ -29,13 +29,19 @@ const {
   bulkUpdateMentorCapacities,
   changeMentorForTeam,
   updateAdminPassword,
-  getDashboardStats
+  getDashboardStats,
+  bulkUploadFromExcel,
+  uploadProfilePictures,
+  uploadProfileZipHandler
   
 } = require('../controllers/adminControllers.js');
 
 const { authenticateAdmin, authorize } = require('../middleware/authMiddleware.js');
-
+const uploadpp = require("../middleware/uploadProfilePics");
+const upload = require("../utils/upload.js");
+const uploadZip = require("../middleware/uploadZip");
 const router = express.Router();
+
 
 
 //change password 
@@ -90,5 +96,21 @@ router.delete('/delete-announcement/:id', authenticateAdmin, authorize(['admin']
 
 // Shift students route
 router.put('/shift/students', authenticateAdmin, authorize(['admin']), shiftStudents);
+
+// Bulk upload from Excel
+router.post("/students/upload-excel", upload.single("file"), authenticateAdmin, authorize(['admin']), bulkUploadFromExcel);
+
+// Profile picture upload route
+router.post("/students/upload-profile-pictures",authenticateAdmin,authorize(["admin"]),uploadpp.array("profilePics", 100),uploadProfilePictures);
+
+// ZIP file upload route
+router.post(
+  "/students/upload-profile-zip",
+  uploadZip.single("file"),
+  authenticateAdmin,
+  authorize(["admin"]),
+  uploadProfileZipHandler
+);
+
 
 module.exports = router;
