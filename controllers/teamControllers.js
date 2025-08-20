@@ -617,13 +617,18 @@ exports.getTeamAndProjectsByUserId = async (req, res) => {
     let currentTeam = null;
 
     for (const team of teams) {
-      const [student1, student2] = await Promise.all([
+      const [student1, student2, mentor] = await Promise.all([
         Student.findByPk(team.student1_id, {
           attributes: ["student_name", "department_name", "email", "reg_number", "profile_pic_url"]
         }),
         Student.findByPk(team.student2_id, {
           attributes: ["student_name", "department_name", "email", "reg_number", "profile_pic_url"]
-        })
+        }),
+        team.mentor_id
+          ? Mentor.findByPk(team.mentor_id, {
+              attributes: ["id", "name", "email", "specialized_in", "profile_pic_url"]
+            })
+          : null
       ]);
 
       const [pt1, pt2, fyp] = await Promise.all([
@@ -636,7 +641,8 @@ exports.getTeamAndProjectsByUserId = async (req, res) => {
         result.ProfessionalTraining1 = {
           team,
           students: { student1, student2 },
-          project: pt1
+          project: pt1,
+          mentor
         };
       }
 
@@ -644,7 +650,8 @@ exports.getTeamAndProjectsByUserId = async (req, res) => {
         result.ProfessionalTraining2 = {
           team,
           students: { student1, student2 },
-          project: pt2
+          project: pt2,
+          mentor
         };
       }
 
@@ -652,19 +659,21 @@ exports.getTeamAndProjectsByUserId = async (req, res) => {
         result.FinalYearProject = {
           team,
           students: { student1, student2 },
-          project: fyp
+          project: fyp,
+          mentor
         };
       }
 
-      // 🟢 If this is the first approved team, assign as currentTeam
+      // 🟢 If this is the first approved team, assign as currentTeam (with mentor details)
       if (!currentTeam && team.status === "approved") {
         currentTeam = {
           id: team.id,
           mentor_id: team.mentor_id,
+          mentor,
           student1_id: team.student1_id,
           student2_id: team.student2_id,
           status: team.status,
-          current_semester:team.current_semester
+          current_semester: team.current_semester
         };
       }
     }
