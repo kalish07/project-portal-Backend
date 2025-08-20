@@ -343,7 +343,7 @@ exports.rejectInvitation = async (req, res) => {
     // Fetch the invitation by invitationId and check if the user is the recipient
     const invitation = await Invitation.findOne({
       where: {
-        sender_id: invitationId,
+        id: invitationId,
         recipient_id: userId // Check if the user is the recipient
       }
     });
