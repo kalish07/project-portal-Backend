@@ -81,7 +81,7 @@ exports.sendInvitation = async (req, res) => {
       return res.status(400).json({ message: "You cannot invite yourself" });
     }
 
-    // ✅ Check for existing pending invitations (both directions)
+    // ✅ Check for existing pending invitations (both directions between same users)
     const existingInvitation = await Invitation.findOne({
       where: {
         [Op.or]: [
@@ -93,10 +93,38 @@ exports.sendInvitation = async (req, res) => {
     });
 
     if (existingInvitation) {
-      return res.status(400).json({ 
-        message: existingInvitation.sender_id === senderId 
-          ? "You've already sent an invitation to this student" 
+      return res.status(400).json({
+        message: existingInvitation.sender_id === senderId
+          ? "You've already sent an invitation to this student"
           : "This student has already sent you an invitation"
+      });
+    }
+
+    // 🚫 New: Check if sender already has ANY pending invitation
+    const senderPending = await Invitation.findOne({
+      where: {
+        sender_id: senderId,
+        status: "pending"
+      }
+    });
+
+    if (senderPending) {
+      return res.status(400).json({
+        message: "You already have a pending invitation. Please wait until it's accepted or rejected."
+      });
+    }
+
+    // 🚫 New: Check if recipient already has ANY pending invitation
+    const recipientPending = await Invitation.findOne({
+      where: {
+        recipient_id: recipientId,
+        status: "pending"
+      }
+    });
+
+    if (recipientPending) {
+      return res.status(400).json({
+        message: "This student already has a pending invitation. Please wait until it's resolved."
       });
     }
 
@@ -158,16 +186,16 @@ exports.sendInvitation = async (req, res) => {
       status: "pending"
     });
 
-    res.status(201).json({ 
-      message: "Invitation sent successfully", 
-      invitation 
+    res.status(201).json({
+      message: "Invitation sent successfully",
+      invitation
     });
 
   } catch (error) {
     console.error("Error sending invitation:", error);
-    res.status(500).json({ 
-      message: "Error sending invitation", 
-      error: error.message 
+    res.status(500).json({
+      message: "Error sending invitation",
+      error: error.message
     });
   }
 };
