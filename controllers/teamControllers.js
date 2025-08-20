@@ -308,7 +308,6 @@ exports.withdrawInvitation = async (req, res) => {
 exports.acceptInvitation = async (req, res) => {
   const userId = req.user.id; // The recipient
   const { invitationId } = req.params; // sender_id in this case
-  console.log(userId,invitationId);
 
   try {
     // Find the invitation
@@ -332,7 +331,7 @@ exports.acceptInvitation = async (req, res) => {
       return res.status(400).json({ message: "Sender or recipient student not found" });
     }
 
-    // ❗Check if they are in the same semester
+    // ❗ Check if they are in the same semester
     if (sender.current_semester !== recipient.current_semester) {
       return res.status(400).json({ message: "Students must be in the same semester to form a team" });
     }
@@ -346,10 +345,23 @@ exports.acceptInvitation = async (req, res) => {
       status: "pending"
     });
 
-    // ❌ Delete the accepted invitation
-    await invitation.destroy();
+    // ❌ Delete *all* pending invitations involving either sender or recipient
+    await Invitation.destroy({
+      where: {
+        status: "pending",
+        [Op.or]: [
+          { sender_id: sender.id },
+          { recipient_id: sender.id },
+          { sender_id: recipient.id },
+          { recipient_id: recipient.id }
+        ]
+      }
+    });
 
-    res.status(200).json({ message: "Invitation accepted and team created", team: newTeam });
+    res.status(200).json({
+      message: "Invitation accepted, team created, and all other pending invitations removed",
+      team: newTeam
+    });
 
   } catch (error) {
     console.error("Error accepting invitation:", error);
