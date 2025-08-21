@@ -19,25 +19,25 @@ exports.getStudents = async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    // 2. Get all approved teams
-    const approvedTeams = await Team.findAll({
-      where: { status: "approved" },
+    // 2. Get all teams that are not disbanded
+    const activeTeams = await Team.findAll({
+      where: { status: { [Op.ne]: "disbanded" } },
       attributes: ["student1_id", "student2_id"]
     });
 
-    // 3. Collect IDs of students already in approved teams
-    const approvedStudentIds = new Set();
-    approvedTeams.forEach(team => {
-      if (team.student1_id) approvedStudentIds.add(team.student1_id);
-      if (team.student2_id) approvedStudentIds.add(team.student2_id);
+    // 3. Collect IDs of students already in teams
+    const teamedStudentIds = new Set();
+    activeTeams.forEach(team => {
+      if (team.student1_id) teamedStudentIds.add(team.student1_id);
+      if (team.student2_id) teamedStudentIds.add(team.student2_id);
     });
 
-    // 4. Fetch eligible students (not in approved teams, same department/semester)
+    // 4. Fetch eligible students (not in teams, same department/semester)
     const students = await Student.findAll({
       where: {
         id: {
           [Op.ne]: currentUserId,
-          [Op.notIn]: Array.from(approvedStudentIds)
+          [Op.notIn]: Array.from(teamedStudentIds)
         },
         department_name: currentStudent.department_name,
         current_semester: currentStudent.current_semester
