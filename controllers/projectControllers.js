@@ -171,12 +171,16 @@ exports.viewProjects = async (req, res) => {
 // ===================== Submit report & PPT =====================
 exports.submitDocumentLink = async (req, res) => {
   try {
+    // CORRECTED: Access fields directly from req.body, not req.body.link
     const { project_type, link, doc_type } = req.body;
     const { id: projectId } = req.params;
 
     // Validate required fields
     if (!project_type || !link || !doc_type) {
-      return res.status(400).json({ error: 'Missing required fields: project_type, link, or doc_type' });
+      return res.status(400).json({ 
+        error: 'Missing required fields: project_type, link, or doc_type',
+        received: req.body // This will help debug what's actually being received
+      });
     }
 
     if (typeof link !== 'string' || !link.startsWith("https://")) {
@@ -201,7 +205,7 @@ exports.submitDocumentLink = async (req, res) => {
       'Abstract': 'abstract_url',
       'Report': 'report_pdf_url',
       'Slide Deck': 'ppt_url',
-      'Demo Video': 'demo_video_url' // Added demo video field
+      'Demo Video': 'demo_video_url'
     };
 
     const backendField = docTypeMap[doc_type];
