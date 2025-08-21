@@ -171,15 +171,21 @@ exports.viewProjects = async (req, res) => {
 // ===================== Submit report & PPT =====================
 exports.submitDocumentLink = async (req, res) => {
   try {
-    // CORRECTED: Access fields directly from req.body, not req.body.link
-    const { project_type, link, doc_type } = req.body;
+    // Handle nested structure: extract from req.body.link
+    const { project_type, link, doc_type } = req.body.link || req.body; // Try both structures
+    
     const { id: projectId } = req.params;
 
     // Validate required fields
     if (!project_type || !link || !doc_type) {
       return res.status(400).json({ 
         error: 'Missing required fields: project_type, link, or doc_type',
-        received: req.body // This will help debug what's actually being received
+        received: req.body,
+        expectedFormat: {
+          project_type: "string",
+          link: "string",
+          doc_type: "string"
+        }
       });
     }
 
