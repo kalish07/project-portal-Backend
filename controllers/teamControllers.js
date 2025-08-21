@@ -65,138 +65,69 @@ exports.getStudents = async (req, res) => {
 
 // ✅ Send team invitation to another student
 // POST /api/students/send-invitation
-exports.sendInvitation = async (req, res) => {
-  const { recipientId } = req.body;
-  const senderId = req.user.id;
+exports.acceptInvitation = async (req, res) => {
+  const userId = req.user.id; // recipient (B)
+  const { invitationId } = req.params; // invitation being accepted
 
   try {
-    // ✅ Check if recipient exists
-    const recipient = await Student.findByPk(recipientId);
-    if (!recipient) {
-      return res.status(404).json({ message: "Student not found" });
-    }
-
-    // ❌ Cannot invite self
-    if (recipientId === senderId) {
-      return res.status(400).json({ message: "You cannot invite yourself" });
-    }
-
-    // ✅ Check for existing pending invitations (both directions between same users)
-    const existingInvitation = await Invitation.findOne({
+    // Find the invitation
+    const invitation = await Invitation.findOne({
       where: {
-        [Op.or]: [
-          { sender_id: senderId, recipient_id: recipientId },
-          { sender_id: recipientId, recipient_id: senderId }
-        ],
+        id: invitationId,
+        recipient_id: userId,
         status: "pending"
       }
     });
 
-    if (existingInvitation) {
+    if (!invitation) {
+      return res.status(404).json({ message: "Invitation not found or already processed." });
+    }
+
+    // Fetch both students
+    const sender = await Student.findByPk(invitation.sender_id); // A
+    const recipient = await Student.findByPk(userId); // B
+
+    if (!sender || !recipient) {
+      return res.status(400).json({ message: "Sender or recipient student not found" });
+    }
+
+    // ❗ Check if they are in the same semester
+    if (sender.current_semester !== recipient.current_semester) {
       return res.status(400).json({
-        message: existingInvitation.sender_id === senderId
-          ? "You've already sent an invitation to this student"
-          : "This student has already sent you an invitation"
+        message: "Students must be in the same semester to form a team"
       });
     }
 
-    // 🚫 New: Check if sender already has ANY pending invitation
-    const senderPending = await Invitation.findOne({
-      where: {
-        sender_id: senderId,
-        status: "pending"
-      }
-    });
-
-    if (senderPending) {
-      return res.status(400).json({
-        message: "You already have a pending invitation. Please wait until it's accepted or rejected."
-      });
-    }
-
-    // 🚫 New: Check if recipient already has ANY pending invitation
-    const recipientPending = await Invitation.findOne({
-      where: {
-        recipient_id: recipientId,
-        status: "pending"
-      }
-    });
-
-    if (recipientPending) {
-      return res.status(400).json({
-        message: "This student already has a pending invitation. Please wait until it's resolved."
-      });
-    }
-
-    // ✅ Check if users are already in a team together (except disbanded)
-    const existingTeam = await Team.findOne({
-      where: {
-        [Op.or]: [
-          { student1_id: senderId, student2_id: recipientId },
-          { student1_id: recipientId, student2_id: senderId }
-        ],
-        status: {
-          [Op.not]: "disbanded"
-        }
-      }
-    });
-
-    if (existingTeam) {
-      return res.status(400).json({ message: "You're already in a team with this student" });
-    }
-
-    // ✅ Check if sender is already in any non-disbanded team
-    const senderInTeam = await Team.findOne({
-      where: {
-        [Op.or]: [
-          { student1_id: senderId },
-          { student2_id: senderId }
-        ],
-        status: {
-          [Op.not]: "disbanded"
-        }
-      }
-    });
-
-    if (senderInTeam) {
-      return res.status(400).json({ message: "You're already in a team" });
-    }
-
-    // ✅ Check if recipient is already in any non-disbanded team
-    const recipientInTeam = await Team.findOne({
-      where: {
-        [Op.or]: [
-          { student1_id: recipientId },
-          { student2_id: recipientId }
-        ],
-        status: {
-          [Op.not]: "disbanded"
-        }
-      }
-    });
-
-    if (recipientInTeam) {
-      return res.status(400).json({ message: "This student is already in a team" });
-    }
-
-    // ✅ Create the invitation
-    const invitation = await Invitation.create({
-      sender_id: senderId,
-      recipient_id: recipientId,
+    // ✅ Create team with current_semester
+    const newTeam = await Team.create({
+      student1_id: sender.id,
+      student2_id: recipient.id,
+      mentor_id: null,
+      current_semester: sender.current_semester,
       status: "pending"
     });
 
-    res.status(201).json({
-      message: "Invitation sent successfully",
-      invitation
+    // ✅ Delete ALL other invitations involving either A or B
+    await Invitation.destroy({
+      where: {
+        status: "pending",
+        [Op.or]: [
+          { sender_id: sender.id },
+          { recipient_id: sender.id },
+          { sender_id: recipient.id },
+          { recipient_id: recipient.id }
+        ]
+      }
+    });
+
+    res.status(200).json({
+      message: "Invitation accepted, team created, and all other pending invitations removed",
+      team: newTeam
     });
 
   } catch (error) {
-    console.error("Error sending invitation:", error);
-    res.status(500).json({
-      message: "Error sending invitation",
-      error: error.message
-    });
+    console.error("Error accepting invitation:", error);
+    res.status(500).json({ message: "Error accepting invitation", error: error.message });
   }
 };
 
