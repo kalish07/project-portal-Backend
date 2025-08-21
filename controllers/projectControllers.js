@@ -171,10 +171,15 @@ exports.viewProjects = async (req, res) => {
 // ===================== Submit report & PPT =====================
 exports.submitDocumentLink = async (req, res) => {
   try {
-    const { project_type, link, doc_type } = req.body.link;
-    const { id: documentId } = req.params; // Using 'documentId' for clarity
+    const { project_type, link, doc_type } = req.body;
+    const { id: projectId } = req.params;
 
-    if (!link || typeof link !== 'string' || !link.startsWith("https://")) {
+    // Validate required fields
+    if (!project_type || !link || !doc_type) {
+      return res.status(400).json({ error: 'Missing required fields: project_type, link, or doc_type' });
+    }
+
+    if (typeof link !== 'string' || !link.startsWith("https://")) {
       return res.status(400).json({ error: 'Invalid or missing Google Drive link' });
     }
 
@@ -183,7 +188,7 @@ exports.submitDocumentLink = async (req, res) => {
       return res.status(400).json({ error: 'Invalid project type' });
     }
 
-    const project = await ProjectModel.findByPk(documentId);
+    const project = await ProjectModel.findByPk(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -195,12 +200,16 @@ exports.submitDocumentLink = async (req, res) => {
     const docTypeMap = {
       'Abstract': 'abstract_url',
       'Report': 'report_pdf_url',
-      'Slide Deck': 'ppt_url'
+      'Slide Deck': 'ppt_url',
+      'Demo Video': 'demo_video_url' // Added demo video field
     };
 
     const backendField = docTypeMap[doc_type];
     if (!backendField) {
-      return res.status(400).json({ error: 'Invalid document type' });
+      return res.status(400).json({ 
+        error: 'Invalid document type',
+        validTypes: Object.keys(docTypeMap)
+      });
     }
 
     // Update document link field
@@ -210,8 +219,13 @@ exports.submitDocumentLink = async (req, res) => {
     return res.status(200).json({
       message: 'Document link submitted successfully',
       updatedField: backendField,
-      projectId: documentId,
-      project
+      projectId: projectId,
+      project: {
+        id: project.id,
+        title: project.title,
+        [backendField]: link,
+        approved_status: project.approved_status
+      }
     });
   } catch (err) {
     console.error('Document submission failed:', err);
