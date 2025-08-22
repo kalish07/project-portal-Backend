@@ -2,7 +2,8 @@ const express = require("express");
 const { 
   getStudents, 
   getMentors, 
-  requestMentor, 
+  requestMentor,
+  createSoloTeam, 
   getTeamDetails,
   sendInvitation,
   getIncomingInvitations,
@@ -22,6 +23,9 @@ router.get("/students", authenticate, getStudents);
 
 // ✅ Route to send team invitation
 router.post("/send-invitation", authenticate, sendInvitation);
+
+// route solo team creation
+router.post("/solo", authenticate, createSoloTeam);
 
 // ✅ Route to accept an invitation
 router.post("/invitations/:invitationId/accept", authenticate, acceptInvitation);

@@ -60,8 +60,55 @@ exports.getStudents = async (req, res) => {
   }
 };
 
+/// solo team creation
+// POST /api/team/create-solo
+exports.createSoloTeam = async (req, res) => {
+  const userId = req.user.id;
 
+  try {
+    const student = await Student.findByPk(userId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
 
+    // Check if the student already has a team
+    const existingTeam = await Team.findOne({
+      where: {
+        [Op.or]: [{ student1_id: userId }, { student2_id: userId }]
+      }
+    });
+
+    if (existingTeam) {
+      return res.status(400).json({ message: "You already have a team" });
+    }
+
+    // Create a solo team
+    const newTeam = await Team.create({
+      student1_id: student.id,
+      student2_id: student.id, // both members are the same
+      mentor_id: null,
+      current_semester: student.current_semester,
+      status: "pending" // or "none" if you want
+    });
+
+    // Optional: delete any pending invites from or to this student
+    await Invitation.destroy({
+      where: {
+        status: "pending",
+        [Op.or]: [{ sender_id: userId }, { recipient_id: userId }]
+      }
+    });
+
+    res.status(200).json({
+      message: "Solo team created successfully",
+      team: newTeam
+    });
+
+  } catch (error) {
+    console.error("Error creating solo team:", error);
+    res.status(500).json({ message: "Error creating solo team", error: error.message });
+  }
+};
 
 // ✅ Send team invitation to another student
 // POST /api/students/send-invitation
