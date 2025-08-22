@@ -17,7 +17,11 @@ const {
   verifyCurrentPassword,
   changePassword,
   updateStudentPassword,
+  updateProfilePic,
+  ppu
 } = require('../controllers/studentControllers');
+
+
 
 const {
   // Team controllers
@@ -54,6 +58,7 @@ router.post('/login', loginStudent);
 router.get('/profile/:id', authenticate, getStudentProfile);
 router.get('/announcements', authenticate, getStudentAnnouncements);
 router.post('/change-password', updateStudentPassword);
+router.post("/profile-pic", authenticate, ppu.single("profile_pic"), updateProfilePic);
 
 // ==================== STUDENT PROJECT ROUTES ====================
 router.get('/projects/:studentId', authenticate, getStudentProjects);

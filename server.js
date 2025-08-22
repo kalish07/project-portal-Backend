@@ -14,6 +14,7 @@ app.use(express.json());
 
 // Serve uploaded files
 app.use('/uploads', express.static('uploads'));
+app.use("/uploads/profile_pics", express.static("uploads/profile_pics"));
 
 app.use('/auth', authRoutes);
 app.use('/api/students', studentRoutes);

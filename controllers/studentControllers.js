@@ -5,6 +5,10 @@ const { Student, Team, Mentor, ProfessionalTraining1, ProfessionalTraining2, Fin
 const team = require("../models/team");
 const { doesNotMatch } = require("assert");
 require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
+const sharp = require("sharp");
+const multer = require("multer");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -445,5 +449,80 @@ exports.updateStudentPassword = async (req, res) => {
   } catch (error) {
     console.error('Error updating password:', error);
     return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
+
+// ==================== DIRECTORIES ====================
+const PROFILE_DIR = path.join(__dirname, "../uploads/profile_pics");
+if (!fs.existsSync(PROFILE_DIR)) fs.mkdirSync(PROFILE_DIR, { recursive: true });
+
+// ==================== MULTER SETUP ====================
+exports.ppu = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, PROFILE_DIR);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+
+      // Use registerno and name from req.user (from authentication middleware)
+      const registerno = req.user?.registerno || "unknownReg";
+      const name = req.user?.name || "unknownName";
+
+      // Make name safe for filenames
+      const safeName = name.replace(/\s+/g, "_");
+
+      const filename = `${registerno}-${safeName}${ext}`;
+
+      cb(null, filename);
+    },
+  }),
+});
+
+// ==================== PROFILE PIC UPDATE ====================
+exports.updateProfilePic = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Find student
+    const student = await Student.findByPk(req.user.id);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const uploadedPath = req.file.path;
+
+    // 🔥 Optional: Optimize/compress image but overwrite same file (no new filename)
+    await sharp(uploadedPath)
+      .rotate()
+      .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+      .toBuffer()
+      .then(data => {
+        fs.writeFileSync(uploadedPath, data);
+      });
+
+    // Delete old profile picture if exists
+    if (student.profile_pic_url) {
+      const oldPicPath = path.join(PROFILE_DIR, path.basename(student.profile_pic_url));
+      if (fs.existsSync(oldPicPath)) {
+        fs.unlinkSync(oldPicPath);
+      }
+    }
+
+    // Update DB with uploaded filename (no `compressed_`)
+    student.profile_pic_url = `/uploads/profile_pics/${req.file.filename}`;
+    await student.save();
+
+    res.status(200).json({
+      message: "Profile picture updated successfully",
+      profile_pic_url: student.profile_pic_url,
+    });
+  } catch (err) {
+    console.error("Profile pic update error:", err);
+    res.status(500).json({ message: "Failed to update profile picture", error: err.message });
   }
 };

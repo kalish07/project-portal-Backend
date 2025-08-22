@@ -41,7 +41,10 @@ const authenticate = async (req, res, next) => {
       id: student.id,
       role: decoded.role,
       team_id: team?.id || null,
-      mentor_id: team?.mentor_id || null
+      mentor_id: team?.mentor_id || null,
+      registerno: student.reg_number,  
+      name: student.student_name 
+      
     };
 
     next();
